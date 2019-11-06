@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Helpers to define Timezone and non-default config
+#
+# Timezone definition:
+# Environment variable $NGINX_TZ should be set before use of helper
+#   set_timezone
+#
+# Non-default config file definition:
+# Environment variable $NGINX_CFG should be set before use of helper
+# config file must be located under default prefix '/etc/nginx'
+#   conf_nginx
+#
+
+TZ_PREFIX=/usr/share/zoneinfo
+
+
+. /usr/share/helpers/logger
+
+function set_timezone()
+{
+
+   local TZONE=$1
+
+   if [ -f $TZ_PREFIX/$TZONE ];then
+        print_log $OK "Setting timezone: [$TZONE]"
+        ln -sf $TZ_PREFIX/$TZONE /etc/localtime
+   else
+        print_log $WARN "No Timezone selected. Use default UTC"
+   fi
+
+   print_log $OK "Current time: $(date)"
+}

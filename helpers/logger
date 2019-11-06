@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Logger function with prios
+# usage:
+# print_log <STATUS> <MESSAGE>
+#          STATUS - one of follow vars $OK|$WARN|$ERR
+#          MESSAGE - text message to print
+#
+# If you need to print message without status use:
+# print_log <MESSAGE>
+#
+
+
+# Color definition
+RED='\033[0;31m'
+BLUE='\033[0;35m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+
+# Status definition
+OK=0
+INFO=1
+WARN=2
+ERR=3
+
+# Logger function
+function print_log(){
+    local level=$1
+    local msg=$2
+
+    [[ $# -eq 1 ]] && msg=$1&&level=100
+
+    case $level in
+      $OK)
+          echo -e "$GREEN[OK]$NC $msg"
+          ;;
+      $INFO)
+          echo -e "$BLUE[INFO]$NC $msg"
+          ;;
+      $WARN)
+          echo -e "$YELLOW[WARN]$NC $msg"
+          ;;
+      $ERR)
+          echo -e "$RED[ERR]$NC $msg"
+          ;;
+      *)
+          echo $msg
+    esac
+}
+

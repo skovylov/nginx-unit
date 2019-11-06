@@ -1,0 +1,175 @@
+#!/bin/bash
+
+#Script for auto-creation of users
+# Format:
+# - User:
+#    u:NAME:UID:GROUP:HOME
+#    U - flag for user string
+#    NAME - name of user
+#    UID - User ID number
+#    GROUP - Group name
+#    HOME - Home path of user
+#
+# - Group:
+#   g:NAME:GID:MEMBERS
+#   g - flag for group string
+#   NAME - name of group
+#   GID - Group ID number
+#   MEMBERS - members of the group splitted by commas
+#
+
+
+# include libraries
+. /usr/share/helpers/logger
+
+
+USERLIST=/etc/users.lst
+
+# system defined variables
+ADDUSER=/usr/sbin/adduser
+ADDGROUP=/usr/sbin/addgroup
+GETENT=/usr/bin/getent
+DELUSER=/usr/sbin/deluser
+DELGROUP=/usr/sbin/delgroup
+
+MINUID=1000
+MINGID=1000
+
+declare -a USER_LIST
+declare -a GROUP_LIST
+declare -A GROUP_MEMBERS
+
+
+function parse_group(){
+    local groups=$1
+    local group=""
+    local RETVAL=0
+
+    IFS=":" read -a group <<< $groups
+
+    if [ ${group[1]} -eq ${group[1]} ] 2>/dev/null ; then  
+     
+       [ $MINGID -gt ${group[1]} ] && print_log $ERR "Wrong GID: ${group[1]}. Should be higher 1000" && return 0
+       [ ${group[0]} -eq ${group[0]} ] 2>/dev/null && print_log $ERR "Group name '${group[0]}' must be string" && return 0
+     
+       $GETENT group ${group[0]} > /dev/null 2>&1
+       RETVAL=$?
+
+       [ $RETVAL -eq 0 ] && print_log $WARN "Group ${group[0]} already exist. Ignoring" && return 0
+
+    else
+       return 0
+    fi
+
+    ${ADDGROUP} -g ${group[1]} ${group[0]}
+    RETVAL=$?
+
+    [ $RETVAL -ne 0 ] && print_log $ERR "Group '${group[0]}' not created" && return 0
+  
+    print_log $OK "Creating group: ${group[0]}"
+    
+    GROUP_MEMBERS[${group[0]}]="${group[2]}"
+
+}
+
+function parse_user(){
+    local users=$1
+    local user=""
+    local RETVAL=0
+
+    IFS=":" read -a user <<< $users
+    
+    $GETENT passwd ${user[0]} > /dev/null 2>&1
+    RETVAL=$?
+
+    if [ ${user[1]} -eq ${user[1]} ] 2>/dev/null ; then
+
+       [ $MINUID -gt ${user[1]} ] && print_log $ERR "Wrong UID: ${user[1]}. Should be higher 1000" && return 0
+       [ ${user[0]} -eq ${user[0]} ] 2>/dev/null && print_log $ERR "User name '${user[0]}' must be string" && return 0
+       [ ${user[2]} -eq ${user[2]} ] 2>/dev/null && print_log $ERR "Group name '${user[2]}' for user '${user[0]}' must be string" && return 0
+
+       $GETENT passwd ${user[0]} > /dev/null 2>&1
+       RETVAL=$?
+
+       [ $RETVAL -eq 0 ] && print_log $WARN "User ${user[0]} already exist. Ignoring" && return 0
+
+    else
+       return 0
+    fi
+
+     ${ADDUSER} -D -u ${user[1]} -G ${user[2]} -h ${user[3]} ${user[0]} 
+     RETVAL=$?
+
+     [ $RETVAL -ne 0 ] && print_log $ERR "User '${user[0]}' not created" && return 0
+
+     print_log $OK "Creating user: ${user[0]}"
+
+}
+
+function add_members(){
+    local members
+
+    for group in ${!GROUP_MEMBERS[@]}; do
+        IFS="," read -a members <<< ${GROUP_MEMBERS[$group]}
+        
+        for member in ${members[@]}; do
+            [ $member -eq $member ] 2>/dev/null && print_log $WARN "Wrong group member '$member' of group '$group'" && continue
+
+            $ADDUSER $member $group
+            RETVAL=$?
+            
+            [ $RETVAL -ne 0 ] && print_log $ERR "Member '$memeber' not added to '$group' group" && continue
+
+            print_log $OK "Add member '$member' to group '$group'"
+        done
+    done
+}
+
+function create_user_group(){
+    local cmd=""
+    local numopts=0
+    local RETVAL=0
+    local user=""
+
+    IFS=":" read -a user <<< $userline
+    numopts="${#user[@]}"
+    
+    for groups in ${GROUP_LIST[@]}; do
+        parse_group $groups
+    done
+
+    for users in ${USER_LIST[@]}; do
+        parse_user $users
+
+    done  
+
+    add_members 
+}
+
+#    GROUP_CMD_LIST+="${ADDGROUP} -g ${group[1]} ${group[0]}"
+
+function parse_userlist(){
+
+   while IFS=":" read -r type line; do
+       [[ $type == \#* ]] && continue
+       case $type in
+   	    u|user)
+                 IFS=":" read -a user <<<$line
+                 numopts=${#user[@]}
+                 [ $numopts -ne 4 ] && continue
+ 
+                 USER_LIST+=("$line")
+                ;;
+            g|group)
+                 IFS=":" read -a user <<<$line
+                 numopts=${#user[@]}
+                 [ $numopts -lt 2 ] && continue
+                 GROUP_LIST+=("$line")
+                ;;
+            *)
+                print_log $WARN  "Wrong option: $type[$line]"
+       esac
+   done < $USERLIST
+
+   create_user_group
+}
