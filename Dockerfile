@@ -69,7 +69,8 @@ COPY docker-entrypoint.sh /usr/local/bin/
 COPY helpers /usr/share/helpers
 
 RUN mkdir /docker-entrypoint.d/ \
-    && mkdir /var/log/nginx
+    && mkdir /var/log/nginx \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
